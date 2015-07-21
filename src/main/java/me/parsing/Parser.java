@@ -40,19 +40,29 @@ public interface Parser<T> extends Function<CharReader, ParseResult<T>> {
     }
 
     default <U> Parser<U> map(Function<T, U> f) {
-        return input -> this.apply(input).map(f);
+        return new Parser<U>() {
+            @Override
+            public ParseResult<U> apply(CharReader input) {
+                return Parser.this.apply(input).map(f);
+            }
+
+            @Override
+            public String getName() {
+                return Parser.this.getName();
+            }
+        };
     }
 
     default <U> Parser<Pair<T, U>> then(Parser<U> p) {
-        return flatmap(a -> p.map(b -> Pair.of(a, b))).withName(getName() + " + " + p.getName());
+        return flatmap(a -> p.map(b -> Pair.of(a, b))).withName(getName() + " ~ " + p.getName());
     }
 
     default <U> Parser<U> skipThen(Parser<U> p) {
-        return flatmap(__ -> p.map(b -> b)).withName("(?:" + getName() + ") " + p.getName());
+        return flatmap(__ -> p.map(b -> b)).withName("[" + getName() + "] ~ " + p.getName());
     }
 
     default <U> Parser<T> skip(Parser<U> p) {
-        return flatmap(a -> p.map(__ -> a)).withName(getName() + "(?:" + p.getName() + ")");
+        return flatmap(a -> p.map(__ -> a)).withName(getName() + " ~ [" + p.getName() + "]");
     }
 
     default Parser<T> or(Parser<T> p) {

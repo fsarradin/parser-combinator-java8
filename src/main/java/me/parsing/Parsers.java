@@ -2,6 +2,8 @@ package me.parsing;
 
 import java.time.LocalDate;
 import java.util.NoSuchElementException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Parsers {
 
@@ -9,13 +11,12 @@ public class Parsers {
 
     public static Parser<String> string(String s) {
         Parser<String> parser = input -> {
-            String string = s;
-            int size = string.length();
+            int size = s.length();
             if (!input.sizeIsGreaterOrEqualTo(size))
-                return ParseResult.failure(new NoSuchElementException("\"" + string + "\""), input);
-            if (input.peek(size).toString().equals(string))
-                return ParseResult.success(string, input.drop(size));
-            return ParseResult.failure(new NoSuchElementException(string), input);
+                return ParseResult.failure(new NoSuchElementException("\"" + s + "\""), input);
+            if (input.peek(size).toString().equals(s))
+                return ParseResult.success(s, input.drop(size));
+            return ParseResult.failure(new NoSuchElementException(s), input);
         };
         return parser.withName("\"" + s + "\"");
     }
@@ -53,6 +54,29 @@ public class Parsers {
         return integerOfSize(4).then(integerOfSize(2).then(integerOfSize(2)))
                 .withName("date(YYYYMMDD)")
                 .map(p -> LocalDate.of(p.first, p.second.first, p.second.second));
+    }
+
+    public static Parser<String> regex(String pattern) {
+        return regex(Pattern.compile(pattern));
+    }
+
+    public static Parser<String> regex(Pattern pattern) {
+        return new Parser<String>() {
+            @Override
+            public ParseResult<String> apply(CharReader input) {
+                Matcher matcher = pattern.matcher(input.source);
+                if (!matcher.find(input.offset) || matcher.start() != input.offset) {
+                    return ParseResult.failure(new NoSuchElementException(pattern.pattern()), input);
+                }
+                int size = matcher.end() - matcher.start();
+                return ParseResult.success(matcher.group(), input.drop(size));
+            }
+
+            @Override
+            public String getName() {
+                return "regex(" + pattern.pattern() + ")";
+            }
+        };
     }
 
     public static <T> ParseResult<T> parse(String s, Parser<T> parser) {

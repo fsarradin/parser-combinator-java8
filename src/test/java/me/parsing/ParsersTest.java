@@ -2,7 +2,10 @@ package me.parsing;
 
 import org.junit.Test;
 
+import java.math.BigDecimal;
+import java.math.MathContext;
 import java.time.LocalDate;
+import java.util.function.Function;
 
 import static me.parsing.Parsers.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -102,28 +105,51 @@ public class ParsersTest {
     }
 
     @Test
+    public void should_parse_according_to_regex() throws Exception {
+        Parser<BigDecimal> parser =
+                regex("[+-]?\\d+(\\.\\d+)?")
+                        .map(BigDecimal::new);
+
+        ParseResult<BigDecimal> result = parse("-42.1", parser);
+
+        assertThat(result.getOrThrow()).isEqualTo("-42.1");
+    }
+
+    @Test
     public void should_parse_to_bean() throws Exception {
         class Bean {
             public final String id;
             public final int quantity;
-            private final LocalDate date;
+            public final BigDecimal price;
+            public final LocalDate date;
 
-            public Bean(String id, int quantity, LocalDate date) {
+            public Bean(String id, int quantity, BigDecimal price, LocalDate date) {
                 this.id = id;
                 this.quantity = quantity;
+                this.price = price;
                 this.date = date;
             }
         }
 
+        Function<String, BigDecimal> toPrice =
+                value -> new BigDecimal(value).divide(new BigDecimal("100"), MathContext.DECIMAL128);
+        Function<Pair<String, Pair<Integer, Pair<BigDecimal, LocalDate>>>, Bean> createBean =
+                value -> new Bean(value.first, value.second.first, value.second.second.first, value.second.second.second);
+
         Parser<Bean> parser =
-                string("PRD").skipThen(stringOfSize(5).then(integerOfSize(4).then(dateYYYYMMDD())))
-                        .map(value -> new Bean(value.first, value.second.first, value.second.second));
+                string("PRD")
+                    .skipThen(stringOfSize(5)
+                        .then(integerOfSize(4)
+                            .then(stringOfSize(8).map(toPrice)
+                                .then(dateYYYYMMDD()))))
+                .map(createBean);
 
-        ParseResult<Bean> result = parse("PRDUC459  4120000101", parser);
+        ParseResult<Bean> result = parse("PRDUC459  41    599920000101", parser);
+
         Bean value = result.getOrThrow();
-
         assertThat(value.id).isEqualTo("UC459");
         assertThat(value.quantity).isEqualTo(41);
+        assertThat(value.price).isEqualTo("59.99");
         assertThat(value.date).isEqualTo(LocalDate.of(2000, 1, 1));
     }
 
@@ -133,7 +159,7 @@ public class ParsersTest {
         class Bean {
             public final String id;
             public final int quantity;
-            private final LocalDate date;
+            public final LocalDate date;
 
             public Bean(String id, int quantity, LocalDate date) {
                 this.id = id;
